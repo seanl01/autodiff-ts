@@ -43,26 +43,30 @@ function pass(fn: (...args: any[]) => any) {
 }
 
 
-function evaluate(body: Node, primals: {[key: string | number]: [number, number]}, counter: number): [string | number, number] {
-  let expr: Node = body;
-
+function evaluate(body: Node, primals: { [key: string | number]: [number, number] }, counter: number): [string | number, number] {
   try {
-
     switch (body.type) {
       // every step: store primal values, return reference
       // new value: use counter as key, then increment counter
 
       case "BinaryExpression":
         console.log("Binary Expression!")
+
+        let [firstVal, secondVal, firstDer, secondDer] = [1, 1, 0, 0];
+
         const first = evaluate((body as BinaryExpression).left, primals, counter)
         counter = first[1];
+        firstVal = primals[first[0]][0]
+        firstDer = primals[first[0]][1]
+
         const second = evaluate((body as BinaryExpression).right, primals, counter)
         counter = second[1];
+        secondVal = primals[second[0]][0]
+        secondDer = primals[second[0]][1]
 
-        const res = binaryOperation(primals[first[0]][0], (body as BinaryExpression).operator, primals[second[0]][0])
-        const grad = binGradient(primals[first[0]], (body as BinaryExpression).operator, primals[second[0]])
+        const [res, der] = binCombine([firstVal, firstDer], (body as BinaryExpression).operator, [secondVal, secondDer])
 
-        primals[counter] = [res, grad]
+        primals[counter] = [res, der]
 
         return [counter, counter + 1]
 
@@ -73,38 +77,48 @@ function evaluate(body: Node, primals: {[key: string | number]: [number, number]
 
       case "Identifier":
         return [(body as Identifier).name, counter]
-
     }
   }
 
   finally {
     console.log("primals", primals)
   }
-
-  return [0, 0]
 }
 
 
+function binCombine(left: [number, number], operator: BinaryOperator, right: [number, number]): [number, number] {
+  const [leftVal, leftDer] = left
+  const [rightVal, rightDer] = right
 
-function binaryOperation(a: number, operator: BinaryOperator, b: number) {
-  return eval(`a ${operator} b`)
-}
-
-function binGradient(a: [number, number], operator: BinaryOperator, b: [number, number]): number {
-  const [aVal, aDiff] = a
-  const [bVal, bDiff] = b
+  let [val, der] = [0, 0]
 
   switch (operator) {
     case "*":
-      return aVal * bDiff + bVal * aDiff
+      val = leftVal * rightVal
+      der = leftVal * rightDer + rightVal * leftDer
+      break;
     case "+":
-      return aDiff + bDiff
+      val = leftVal + rightVal
+      der = leftDer + rightDer
+      break;
     case "**":
-      return bVal * (aVal ** (bVal - 1))
+      val = leftVal ** rightVal
+      der = (rightVal * (leftVal ** (rightVal - 1)))
+        * (leftDer + leftVal ** rightVal * Math.log(leftVal) * rightDer) // handles the case when the exponent contains the variable being differentiated w.r.t
+      break;
     case "-":
-      return aDiff - bDiff
+      val = leftVal - rightVal
+      der = (leftDer - rightDer)
+      break;
   }
+
+  return [val, der]
 }
 
 // console.log(parse("a + b", {ecmaVersion: "latest"}).body)
-console.log(evaluate(parse("a + 3 * (b ** 2)", {ecmaVersion: "latest"}).body[0].expression, {a: [1, 0], b: [1, 1]}, 0))
+const primals = { a: [1, 0], b: [1, 1] }
+console.log(evaluate(parse("((b**2 + b) ** 2)", { ecmaVersion: "latest" }).body[0].expression, primals, 0))
+
+
+
+// console.dir(parse("((b**2 + b) ** 2)", {ecmaVersion: "latest"}), { depth: null })
