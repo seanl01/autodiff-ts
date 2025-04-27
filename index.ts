@@ -43,46 +43,40 @@ function pass(fn: (...args: any[]) => any) {
 }
 
 
-function evaluate(body: Node, primals: { [key: string | number]: [number, number] }, counter: number): [string | number, number] {
-  try {
-    switch (body.type) {
-      // every step: store primal values, return reference
-      // new value: use counter as key, then increment counter
+function evaluate(body: Node, primals: { [key: string | number]: [number, number] }, counter: number): [string | number, number] | never {
+  switch (body.type) {
+    // every step: store primal values, return reference
+    // new value: use counter as key, then increment counter
 
-      case "BinaryExpression":
-        console.log("Binary Expression!")
+    case "BinaryExpression":
+      console.log("Binary Expression!")
 
-        let [firstVal, secondVal, firstDer, secondDer] = [1, 1, 0, 0];
+      const first = evaluate((body as BinaryExpression).left, primals, counter)
+      counter = first[1];
+      let firstVal = primals[first[0]][0]
+      let firstDer = primals[first[0]][1]
 
-        const first = evaluate((body as BinaryExpression).left, primals, counter)
-        counter = first[1];
-        firstVal = primals[first[0]][0]
-        firstDer = primals[first[0]][1]
+      const second = evaluate((body as BinaryExpression).right, primals, counter)
+      counter = second[1];
+      let secondVal = primals[second[0]][0]
+      let secondDer = primals[second[0]][1]
 
-        const second = evaluate((body as BinaryExpression).right, primals, counter)
-        counter = second[1];
-        secondVal = primals[second[0]][0]
-        secondDer = primals[second[0]][1]
+      const [res, der] = binCombine([firstVal, firstDer], (body as BinaryExpression).operator, [secondVal, secondDer])
 
-        const [res, der] = binCombine([firstVal, firstDer], (body as BinaryExpression).operator, [secondVal, secondDer])
+      primals[counter] = [res, der]
 
-        primals[counter] = [res, der]
+      return [counter, counter + 1]
 
-        return [counter, counter + 1]
+    case "Literal":
+      const val = (body as Literal).value as number
+      primals[counter] = [val, 0]; // the gradient of a literal/scalar is 0
+      return [counter, counter + 1]
 
-      case "Literal":
-        const val = (body as Literal).value as number
-        primals[counter] = [val, 0]; // the gradient of a literal/scalar is 0
-        return [counter, counter + 1]
-
-      case "Identifier":
-        return [(body as Identifier).name, counter]
-    }
+    case "Identifier":
+      return [(body as Identifier).name, counter]
   }
 
-  finally {
-    console.log("primals", primals)
-  }
+  throw new Error("Invalid construct")
 }
 
 
