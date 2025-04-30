@@ -1,8 +1,9 @@
 // fn/kernel
 // input vector (arguments)
 
-import { ArrowFunctionExpression, ExpressionStatement, BinaryExpression, Identifier, Node, parse, BinaryOperator, Literal } from "acorn";
+import { CallExpression, ArrowFunctionExpression, ExpressionStatement, BinaryExpression, Identifier, Node, parse, BinaryOperator, Literal, Expression } from "acorn";
 import { full, recursive } from "acorn-walk"
+import { MathExpression, Table } from "./types";
 
 function fn(x: number, y: number) {
   return x + y;
@@ -35,15 +36,14 @@ function pass(fn: (...args: any[]) => any) {
 }
 
 
-// Contains initial args and subsequent primal values.
-type Table = { [key: string | number]: [number, number] }
 
-function fwdPass(body: Node, table: Table, counter: number): [string | number, number] | never {
+function fwdPass(body: Node, table: Table, counter: number): [string | number, number] {
   switch (body.type) {
     // every step: store primal values, return reference
     // new value: use counter as key, then increment counter
 
-    // case "CallExpression":
+    case "CallExpression":
+
 
 
     case "BinaryExpression":
@@ -59,7 +59,7 @@ function fwdPass(body: Node, table: Table, counter: number): [string | number, n
       let secondVal = table[second[0]][0]
       let secondDer = table[second[0]][1]
 
-      const [res, der] = binCombine([firstVal, firstDer], (body as BinaryExpression).operator, [secondVal, secondDer])
+      const [res, der] = _binCombine([firstVal, firstDer], (body as BinaryExpression).operator, [secondVal, secondDer])
 
       table[counter] = [res, der]
 
@@ -77,8 +77,53 @@ function fwdPass(body: Node, table: Table, counter: number): [string | number, n
   throw new Error("Invalid construct")
 }
 
+export function _evalCallExpr(expr: CallExpression, table: Table, counter: number): [string | number, number] {
+  // evaluate callee
+  const callee = expr.callee;
 
-function binCombine(left: [number, number], operator: BinaryOperator, right: [number, number]): [number, number] {
+    if (callee.type === "MemberExpression") {
+      if (callee.object.type === "Identifier" && callee.object.name === "Math")
+        return _evalMathExpr(expr as MathExpression, table, counter);
+
+    }
+
+
+
+  // evaluate args
+
+  //
+}
+
+export function _evalMathExpr(expr: MathExpression, table: Table, counter: number): [string | number, number] {
+  const args = expr.arguments
+
+  // evaluate argument
+  let key: string | number;
+  [key, counter] = fwdPass(args[0], table, counter);
+
+  let [val, der] = [table[key][0], table[key][1]]
+
+  switch (expr.callee.property.name) {
+    case "log":
+      table[counter] = [Math.log(val), (1 / val * der)]
+      break;
+
+    case "sin":
+      table[counter] = [Math.sin(val), (Math.cos(val) * der)]
+      break;
+
+    case "sqrt":
+      table[counter] = _binCombine([val, der], "**", [1/2, 0])
+      break;
+  }
+
+  return [counter, counter + 1]
+}
+
+
+// function evalMathExpr
+
+function _binCombine(left: [number, number], operator: BinaryOperator, right: [number, number]): [number, number] {
   const [leftVal, leftDer] = left
   const [rightVal, rightDer] = right
 
@@ -110,7 +155,9 @@ function binCombine(left: [number, number], operator: BinaryOperator, right: [nu
 // console.log(parse("a + b", {ecmaVersion: "latest"}).body)
 const primals = { a: [1, 0], b: [1, 1] }
 // console.log(fwdPass(parse("((b**2 + b) ** 2)", { ecmaVersion: "latest" }).body[0].expression, primals, 0))
-console.dir(parse("Math.log(b)", { ecmaVersion: "latest"}), {depth: null})
+const funcs = { func: () => b }
+
+console.dir(parse("", { ecmaVersion: "latest"}), {depth: null})
 
 
 
