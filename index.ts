@@ -1,9 +1,15 @@
 // fn/kernel
 // input vector (arguments)
 
-import { CallExpression, ArrowFunctionExpression, ExpressionStatement, BinaryExpression, Identifier, Node, parse, BinaryOperator, Literal, Expression } from "acorn";
+import {
+  CallExpression, ArrowFunctionExpression, ExpressionStatement, BinaryExpression
+  , Identifier, Node, parse, BinaryOperator, Literal, Expression, Function as FunctionType,
+  BlockStatement,
+  ReturnStatement
+} from "acorn";
 import { full, recursive } from "acorn-walk"
 import { MathExpression, Table } from "./types";
+import { FunctionExpression } from "typescript";
 
 function fn(x: number, y: number) {
   return x + y;
@@ -13,31 +19,80 @@ function fn(x: number, y: number) {
 // Intermediate primals:
 // The first one to get evaluated is the v0 primal. Subsequent ones that are composed of it come later.
 
-function pass(fn: (...args: any[]) => any) {
-  // get params: start from vi - n
-  const funcObj = ((parse(fn.toString(), { ecmaVersion: 6 }).body[0] as ExpressionStatement)
-    .expression as ArrowFunctionExpression)
+/**
+* Function factory which returns a wrapped version of the function that returns the value as well as the jacobian vector
+* @param fn a pure arrow function or reference to another pure function. Only supports functions that returns a single expression which evaluates to a scalar
+* @returns a wrapped version of the passed function that returns the standard value as well as the jacobian vector
+*/
 
-  const { body, params } = funcObj;
-  console.log(funcObj)
+export function makeGradFn(fn: (...args: any[]) => number): (...args: any[]) => never | { value: number, gradients: any[] } {
+  let funcExpr = (parse(fn.toString(), { ecmaVersion: 6 })
+    .body[0])
 
-  console.log("params", params)
-  console.log("body", body)
+  let func: FunctionType;
 
-  const primals = [...params];
+  if (funcExpr.type === "FunctionDeclaration") {
+    if (funcExpr.body instanceof Array)
+      throw new Error("Function contains more than just return statement")
 
-  // full(body, node => {
-  //   switch (node.type) {
-  //     case "BinaryExpression":
+    if (funcExpr.body.body[0].type !== "ReturnStatement")
+      throw new Error("Function contains more than just return statement")
 
-  //   }
-  // })
+      func = funcExpr as FunctionType
+      func.body = ((func.body as BlockStatement).body[0] as ReturnStatement).argument as Expression
+  }
 
+  else if ((funcExpr as ExpressionStatement).expression.type === "ArrowFunctionExpression") {
+    func = (funcExpr as ExpressionStatement).expression as ArrowFunctionExpression
+  }
+
+  else {
+    throw new Error("Invalid function expression")
+  }
+
+  console.log("func", func)
+  const { body, params } = func
+  let value: number | null = null
+  const gradients: any[] = []
+
+  return (...args) => {
+    // alternate switching "on and off" each argument for forward pass
+    const table: Table = {}
+
+    // fill value for each passed argument
+    params.forEach((p, idx) => {
+      p = p as Identifier
+      table[p.name] = [args[idx], 0];
+    })
+
+    // Differentiate for each variable
+    params.forEach((p, _) => {
+      p = p as Identifier
+      const tableCopy = structuredClone(table);
+
+      tableCopy[p.name] = [table[p.name][0], 1] // equivalent to multiplying by unit vector
+
+      const [lastPrimalIdx] = fwdPass(body, tableCopy, 0)
+
+      if (value === null)
+        value = tableCopy[lastPrimalIdx][0]
+
+      gradients.push(tableCopy[lastPrimalIdx][1]) // push gradient for that param
+    })
+
+    if (value === null)
+      throw new Error("Invalid value")
+
+    return { value, gradients }
+  }
 }
 
-
-
 function fwdPass(body: Node, table: Table, counter: number): [string | number, number] {
+  // takes advantage of pre-computed values?
+  // if (counter.toString() in table) {
+  //   return [counter, counter + 1]
+  // }
+
   switch (body.type) {
     // every step: store primal values, return reference
     // new value: use counter as key, then increment counter
@@ -81,11 +136,11 @@ export function _evalCallExpr(expr: CallExpression, table: Table, counter: numbe
   // evaluate callee
   const callee = expr.callee;
 
-    if (callee.type === "MemberExpression") {
-      if (callee.object.type === "Identifier" && callee.object.name === "Math")
-        return _evalMathExpr(expr as MathExpression, table, counter);
+  if (callee.type === "MemberExpression") {
+    if (callee.object.type === "Identifier" && callee.object.name === "Math")
+      return _evalMathExpr(expr as MathExpression, table, counter);
 
-    }
+  }
 
 
 
@@ -113,7 +168,7 @@ export function _evalMathExpr(expr: MathExpression, table: Table, counter: numbe
       break;
 
     case "sqrt":
-      table[counter] = _binCombine([val, der], "**", [1/2, 0])
+      table[counter] = _binCombine([val, der], "**", [1 / 2, 0])
       break;
   }
 
@@ -157,7 +212,7 @@ const primals = { a: [1, 0], b: [1, 1] }
 // console.log(fwdPass(parse("((b**2 + b) ** 2)", { ecmaVersion: "latest" }).body[0].expression, primals, 0))
 const funcs = { func: () => b }
 
-console.dir(parse("", { ecmaVersion: "latest"}), {depth: null})
+console.dir(parse("", { ecmaVersion: "latest" }), { depth: null })
 
 
 
