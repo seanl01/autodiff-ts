@@ -12,7 +12,6 @@ function fn(x: number, y: number) {
 // Intermediate primals:
 // The first one to get evaluated is the v0 primal. Subsequent ones that are composed of it come later.
 
-
 function pass(fn: (...args: any[]) => any) {
   // get params: start from vi - n
   const funcObj = ((parse(fn.toString(), { ecmaVersion: 6 }).body[0] as ExpressionStatement)
@@ -33,43 +32,42 @@ function pass(fn: (...args: any[]) => any) {
   //   }
   // })
 
-  // output scalar/vector
-
-  // primals
-
-  // gradients
-  // tangents
-
 }
 
 
-function evaluate(body: Node, primals: { [key: string | number]: [number, number] }, counter: number): [string | number, number] | never {
+// Contains initial args and subsequent primal values.
+type Table = { [key: string | number]: [number, number] }
+
+function fwdPass(body: Node, table: Table, counter: number): [string | number, number] | never {
   switch (body.type) {
     // every step: store primal values, return reference
     // new value: use counter as key, then increment counter
 
+    // case "CallExpression":
+
+
     case "BinaryExpression":
       console.log("Binary Expression!")
 
-      const first = evaluate((body as BinaryExpression).left, primals, counter)
+      const first = fwdPass((body as BinaryExpression).left, table, counter)
       counter = first[1];
-      let firstVal = primals[first[0]][0]
-      let firstDer = primals[first[0]][1]
+      let firstVal = table[first[0]][0]
+      let firstDer = table[first[0]][1]
 
-      const second = evaluate((body as BinaryExpression).right, primals, counter)
+      const second = fwdPass((body as BinaryExpression).right, table, counter)
       counter = second[1];
-      let secondVal = primals[second[0]][0]
-      let secondDer = primals[second[0]][1]
+      let secondVal = table[second[0]][0]
+      let secondDer = table[second[0]][1]
 
       const [res, der] = binCombine([firstVal, firstDer], (body as BinaryExpression).operator, [secondVal, secondDer])
 
-      primals[counter] = [res, der]
+      table[counter] = [res, der]
 
       return [counter, counter + 1]
 
     case "Literal":
       const val = (body as Literal).value as number
-      primals[counter] = [val, 0]; // the gradient of a literal/scalar is 0
+      table[counter] = [val, 0]; // the gradient of a literal/scalar is 0
       return [counter, counter + 1]
 
     case "Identifier":
@@ -102,7 +100,7 @@ function binCombine(left: [number, number], operator: BinaryOperator, right: [nu
       break;
     case "-":
       val = leftVal - rightVal
-      der = (leftDer - rightDer)
+      der = leftDer - rightDer
       break;
   }
 
@@ -111,7 +109,8 @@ function binCombine(left: [number, number], operator: BinaryOperator, right: [nu
 
 // console.log(parse("a + b", {ecmaVersion: "latest"}).body)
 const primals = { a: [1, 0], b: [1, 1] }
-console.log(evaluate(parse("((b**2 + b) ** 2)", { ecmaVersion: "latest" }).body[0].expression, primals, 0))
+// console.log(fwdPass(parse("((b**2 + b) ** 2)", { ecmaVersion: "latest" }).body[0].expression, primals, 0))
+console.dir(parse("Math.log(b)", { ecmaVersion: "latest"}), {depth: null})
 
 
 
