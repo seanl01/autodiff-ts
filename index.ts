@@ -1,23 +1,11 @@
-// fn/kernel
-// input vector (arguments)
-
 import {
   CallExpression, ArrowFunctionExpression, ExpressionStatement, BinaryExpression
   , Identifier, Node, parse, BinaryOperator, Literal, Expression, Function as FunctionType,
   BlockStatement,
-  ReturnStatement
+  ReturnStatement,
+  Pattern
 } from "acorn";
-import { full, recursive } from "acorn-walk"
 import { MathExpression, Table } from "./types";
-import { FunctionExpression } from "typescript";
-
-function fn(x: number, y: number) {
-  return x + y;
-}
-
-
-// Intermediate primals:
-// The first one to get evaluated is the v0 primal. Subsequent ones that are composed of it come later.
 
 /**
 * Function factory which returns a wrapped version of the function that returns the value as well as the jacobian vector
@@ -26,51 +14,21 @@ function fn(x: number, y: number) {
 */
 
 export function makeGradFn(fn: (...args: any[]) => number): (...args: any[]) => never | { value: number, gradients: any[] } {
-  let funcExpr = (parse(fn.toString(), { ecmaVersion: 6 })
-    .body[0])
-
-  let func: FunctionType;
-
-  if (funcExpr.type === "FunctionDeclaration") {
-    if (funcExpr.body instanceof Array)
-      throw new Error("Function contains more than just return statement")
-
-    if (funcExpr.body.body[0].type !== "ReturnStatement")
-      throw new Error("Function contains more than just return statement")
-
-      func = funcExpr as FunctionType
-      func.body = ((func.body as BlockStatement).body[0] as ReturnStatement).argument as Expression
-  }
-
-  else if ((funcExpr as ExpressionStatement).expression.type === "ArrowFunctionExpression") {
-    func = (funcExpr as ExpressionStatement).expression as ArrowFunctionExpression
-  }
-
-  else {
-    throw new Error("Invalid function expression")
-  }
-
-  console.log("func", func)
-  const { body, params } = func
-  let value: number | null = null
-  const gradients: any[] = []
+  const { body, params } = _evalPassedFunction(fn);
 
   return (...args) => {
-    // alternate switching "on and off" each argument for forward pass
-    const table: Table = {}
+    let value: number | null = null
+    const gradients: any[] = []
+    // Initialize table with parameter values
+    const table = _initTable(params, args);
 
-    // fill value for each passed argument
-    params.forEach((p, idx) => {
-      p = p as Identifier
-      table[p.name] = [args[idx], 0];
-    })
-
-    // Differentiate for each variable
+    // alternate switching "on and off" each argument for forward pass to differentiate for each variable
     params.forEach((p, _) => {
       p = p as Identifier
       const tableCopy = structuredClone(table);
 
-      tableCopy[p.name] = [table[p.name][0], 1] // equivalent to multiplying by unit vector
+      const origVal = table[p.name][0]
+      tableCopy[p.name] = [origVal, 1] // equivalent to multiplying by unit vector
 
       const [lastPrimalIdx] = fwdPass(body, tableCopy, 0)
 
@@ -86,6 +44,48 @@ export function makeGradFn(fn: (...args: any[]) => number): (...args: any[]) => 
     return { value, gradients }
   }
 }
+
+function _evalPassedFunction(fn: (...args: any[]) => number): { body: Node, params: Pattern[] } {
+  // evaluates both normal function declarations and arrow functions
+  let funcExpr = (parse(fn.toString(), { ecmaVersion: 6 })
+    .body[0])
+
+  let func: FunctionType;
+
+  if (funcExpr.type === "FunctionDeclaration") {
+    if (funcExpr.body instanceof Array)
+      throw new Error("Function contains more than just return statement")
+
+    if (funcExpr.body.body[0].type !== "ReturnStatement")
+      throw new Error("Function contains more than just return statement")
+
+    func = funcExpr as FunctionType
+    func.body = ((func.body as BlockStatement).body[0] as ReturnStatement).argument as Expression
+  }
+
+  else if ((funcExpr as ExpressionStatement).expression.type === "ArrowFunctionExpression") {
+    func = (funcExpr as ExpressionStatement).expression as ArrowFunctionExpression
+  }
+
+  else {
+    throw new Error("Invalid function expression")
+  }
+
+  const { body, params } = func
+
+  return { body, params }
+}
+
+function _initTable(params: Pattern[], args: any[]) {
+  const table: Table = {}
+  params.forEach((p, idx) => {
+    p = p as Identifier
+    table[p.name] = [args[idx], 0];
+  })
+
+  return table;
+}
+
 
 function fwdPass(body: Node, table: Table, counter: number): [string | number, number] {
   // takes advantage of pre-computed values?
@@ -206,14 +206,3 @@ function _binCombine(left: [number, number], operator: BinaryOperator, right: [n
 
   return [val, der]
 }
-
-// console.log(parse("a + b", {ecmaVersion: "latest"}).body)
-const primals = { a: [1, 0], b: [1, 1] }
-// console.log(fwdPass(parse("((b**2 + b) ** 2)", { ecmaVersion: "latest" }).body[0].expression, primals, 0))
-const funcs = { func: () => b }
-
-console.dir(parse("", { ecmaVersion: "latest" }), { depth: null })
-
-
-
-// console.dir(parse("((b**2 + b) ** 2)", {ecmaVersion: "latest"}), { depth: null })
