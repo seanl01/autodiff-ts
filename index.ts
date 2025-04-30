@@ -31,6 +31,8 @@ export function makeGradFn(fn: (...args: any[]) => number): (...args: any[]) => 
       tableCopy[p.name] = [origVal, 1] // equivalent to multiplying by unit vector
 
       const [lastPrimalIdx] = fwdPass(body, tableCopy, 0)
+      console.log("last", lastPrimalIdx)
+      console.log("table", tableCopy)
 
       if (value === null)
         value = tableCopy[lastPrimalIdx][0]
@@ -47,7 +49,7 @@ export function makeGradFn(fn: (...args: any[]) => number): (...args: any[]) => 
 
 function _evalPassedFunction(fn: (...args: any[]) => number): { body: Node, params: Pattern[] } {
   // evaluates both normal function declarations and arrow functions
-  let funcExpr = (parse(fn.toString(), { ecmaVersion: 6 })
+  let funcExpr = (parse(fn.toString(), { ecmaVersion: 7 })
     .body[0])
 
   let func: FunctionType;
@@ -93,13 +95,14 @@ function fwdPass(body: Node, table: Table, counter: number): [string | number, n
   //   return [counter, counter + 1]
   // }
 
+  console.log("body", body)
+  console.log("table", table)
   switch (body.type) {
     // every step: store primal values, return reference
     // new value: use counter as key, then increment counter
 
     case "CallExpression":
-
-
+      return _evalCallExpr(body as CallExpression, table, counter)
 
     case "BinaryExpression":
       console.log("Binary Expression!")
@@ -170,7 +173,16 @@ export function _evalMathExpr(expr: MathExpression, table: Table, counter: numbe
     case "sqrt":
       table[counter] = _binCombine([val, der], "**", [1 / 2, 0])
       break;
+
+    case "pow":
+      [key, counter] = fwdPass(args[1], table, counter)
+      let [rightVal, rightDer] = table[key]
+      table[counter] = _binCombine([val, der], "**", [rightVal, rightDer])
+      break;
   }
+
+  console.log("table[counter]", table[counter])
+  console.log("table", table)
 
   return [counter, counter + 1]
 }
@@ -195,8 +207,8 @@ function _binCombine(left: [number, number], operator: BinaryOperator, right: [n
       break;
     case "**":
       val = leftVal ** rightVal
-      der = (rightVal * (leftVal ** (rightVal - 1)))
-        * (leftDer + leftVal ** rightVal * Math.log(leftVal) * rightDer) // handles the case when the exponent contains the variable being differentiated w.r.t
+      der = (rightVal * (Math.pow(leftVal, rightVal - 1)))
+        * (leftDer + Math.pow(leftVal, rightVal) * Math.log(leftVal) * rightDer) // handles the case when the exponent contains the variable being differentiated w.r.t
       break;
     case "-":
       val = leftVal - rightVal
