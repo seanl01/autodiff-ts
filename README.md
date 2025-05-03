@@ -1,4 +1,4 @@
-# autodiff-ts
+# autodiff-ts 📈
 
 ## Overview
 autodiff-ts is a TypeScript library for automatic differentiation. It provides a set of functions for computing the derivative of a mathematical expression with respect to a variable.

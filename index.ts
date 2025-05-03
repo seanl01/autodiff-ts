@@ -179,6 +179,9 @@ export function _evalMathExpr(expr: MathExpression, table: Table, counter: numbe
       let [rightVal, rightDer] = table[key]
       table[counter] = _binCombine([val, der], "**", [rightVal, rightDer])
       break;
+
+    default:
+      throw new Error(`Unsupported math function: ${expr.callee.property.name.toString()}`)
   }
 
   console.log("table[counter]", table[counter])
@@ -214,6 +217,8 @@ function _binCombine(left: [number, number], operator: BinaryOperator, right: [n
       val = leftVal - rightVal
       der = leftDer - rightDer
       break;
+    default:
+      throw new Error(`Unsupported binary operator: ${operator}`)
   }
 
   return [val, der]
