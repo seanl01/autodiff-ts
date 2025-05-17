@@ -86,4 +86,9 @@ describe("given a complex function expression", () => {
     expect(value).toEqual(9 + Math.sin(9))
     expect(gradients).toEqual([3 + Math.cos(9) * 6, 3])
   });
+  test("when a complex function expression is given, then it should return a valid function", () => {
+    const { value, gradients } = makeGradFn((x, y) => (x ** 2) * y + x)(2, 4)
+    expect(value).toEqual(18)
+    expect(gradients).toEqual([17, 4])
+  });
 });
