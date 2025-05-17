@@ -90,13 +90,6 @@ function _initTable(params: Pattern[], args: any[]) {
 
 
 function fwdPass(body: Node, table: Table, counter: number): [string | number, number] {
-  // takes advantage of pre-computed values?
-  // if (counter.toString() in table) {
-  //   return [counter, counter + 1]
-  // }
-
-  console.log("body", body)
-  console.log("table", table)
   switch (body.type) {
     // every step: store primal values, return reference
     // new value: use counter as key, then increment counter
@@ -193,6 +186,7 @@ export function _evalMathExpr(expr: MathExpression, table: Table, counter: numbe
 
 // function evalMathExpr
 
+// Evaluates the binary expression given an operator.
 function _binCombine(left: [number, number], operator: BinaryOperator, right: [number, number]): [number, number] {
   const [leftVal, leftDer] = left
   const [rightVal, rightDer] = right
