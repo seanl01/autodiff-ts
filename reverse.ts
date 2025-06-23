@@ -6,9 +6,10 @@ import { Pattern, parse, Identifier, BinaryExpression, BlockStatement, ReturnSta
 // interface for primal/node/variable (value, gradient)
 // If we can account for two tracks at the same time, that would be good
 
-// each module should implement its own combination function
-// addition?
-// log?
+interface Context {
+  env: {[key: string]: number};
+  ordering: GraphNode[]
+}
 
 class GraphNode {
   public incoming: GraphNode[]
@@ -21,12 +22,18 @@ class GraphNode {
 
 export class Variable extends GraphNode {
   constructor(
-    public name: string,
+    public name: string | null,
     public value: number,
     public gradient: number,
     public gradientAcc: number
   ){
     super();
+  }
+
+  static fromLiteral(value: number, outgoing: GraphNode) {
+    const node = new Variable(null, value, 0, 1);
+    node.outgoing = outgoing;
+    return node;
   }
 
   static fromIdentifier(identifier: Identifier, outgoing: GraphNode) {
@@ -36,7 +43,7 @@ export class Variable extends GraphNode {
   }
 
   static fromCompNode(compNode: CompNode) {
-    const node = new Variable("", 0, 0, 1);
+    const node = new Variable(null, 0, 0, 1);
     node.incoming = [compNode];
     return node;
   }
@@ -51,10 +58,6 @@ export class CompNode extends GraphNode {
     super();
     this.computeFn = () => 0;
     this.gradFn = () => 1;
-  }
-
-  public bindComputeFn(computeFn: (variables: number[]) => number) {
-    this.computeFn = (variables: Variable[]) => computeFn(variables.map(v => v.value));
   }
 }
 
@@ -72,41 +75,93 @@ function createGraph(parsedFn: { body: NodeType, params: Pattern[] }) {
 
 }
 
-export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outgoing: GraphNode | null): Variable {
+export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outgoing: GraphNode | null, ctxt: Context): Variable {
+  let node;
+
   switch (body.type) {
+    // same handler for Literal and Identifier
     case "Literal":
-      return Variable.fromIdentifier(body as Identifier, outgoing as GraphNode);
+      node = Variable.fromLiteral((body as Literal).value as number, outgoing as GraphNode)
+      break;
 
     case "Identifier":
-      return Variable.fromIdentifier(body as Identifier, outgoing as GraphNode);
+      node = Variable.fromIdentifier(body as Identifier, outgoing as GraphNode);
+      break;
 
     case "BinaryExpression":
       const comp = new CompNode()
 
       // evaluate left side and right side
       // connect left/right node's outgoing to compnode, and compnode's incoming to left/right node
-      const leftNode = _createGraphInternal((body as BinaryExpression).left, [], comp);
-      const rightNode = _createGraphInternal((body as BinaryExpression).right, [], comp);
+      const leftNode = _createGraphInternal((body as BinaryExpression).left, [], comp, ctxt);
+      const rightNode = _createGraphInternal((body as BinaryExpression).right, [], comp, ctxt);
 
       comp.incoming = [leftNode, rightNode]
 
+      const operator = (body as BinaryExpression).operator;
       // bind computation and backward gradient functions to compnode
-      comp.bindComputeFn((vs) => vs[0] * vs[1]);
-      comp.gradFn = (vs) => vs[0].value * vs[1].gradient + vs[1].value * vs[0].gradient;
+      const [computeFn, gradFn] = provideNodeFns(operator)
+      comp.computeFn = computeFn;
+      comp.gradFn = gradFn;
 
       // compNode result variable
-      return Variable.fromCompNode(comp);
+      ctxt.ordering.push(comp);
+      node = Variable.fromCompNode(comp); // output variable
+      comp.outgoing = node
+      break;
 
     default:
       throw new Error(`Unsupported node type: ${body.type}`);
   }
+
+  ctxt.ordering.push(node);
+  return node;
 }
 
 // TODO: fill values
 // initialise an environment
 // for each param, we store in environment
+// This is still a forward pass, but we are using reverse mode.
+// This simply calculates the gradient of the child node with respect to its inputs.
+// It stores this partial derivative in the input nodes.
 
+// given: topological ordering
+export function fwdPass(context: Context) {
+  if (Object.keys(context.env).length === 0)
+    throw new Error("Environment is empty");
+  _fwdPassInternal(0, context);
+}
 
+function _fwdPassInternal(cur: number, context: Context) {
+  if (cur >= context.ordering.length) return;
+
+  let node = context.ordering[cur];
+
+  // calculates values for each node in the graph
+  // calculate individual gradients per variable
+  if (node instanceof Variable) {
+    if (node.name)
+      node.value = context.env[node.name] // get value from environment
+  }
+
+  else if (node instanceof CompNode) {
+    const inputs = node.incoming as Variable[];
+    const value = node.computeFn(inputs) // evaluate the compnode
+    node.gradFn(inputs) // calculate gradients
+
+    if (node.outgoing)
+      (node.outgoing as Variable).value = value // set the value of the outgoing variable
+    else
+      throw new Error("CompNode has no outgoing variable to set value for");
+
+  }
+
+  else {
+    throw new Error(`Unsupported node type in forward pass: ${node.constructor.name}`);
+  }
+
+  _fwdPassInternal(cur + 1, context)
+}
 
 export function _parseGivenFunction(fn: (...args: any[]) => number): { body: NodeType, params: Pattern[] } {
   // evaluates both normal function declarations and arrow functions
@@ -139,16 +194,45 @@ export function _parseGivenFunction(fn: (...args: any[]) => number): { body: Nod
   return { body, params }
 }
 
-function fwdPass() {
-  // calculates values for each node in the graph
+function provideComputeFn(operator: string): (vs: Variable[]) => number {
+  switch (operator) {
+    case "*":
+      return (vs) => vs[0].value * vs[1].value;
+    case "+":
+      return (vs) => vs[0].value + vs[1].value;
+    case "**":
+      return (vs) => vs[0].value ** vs[1].value;
+    case "-":
+      return (vs) => vs[0].value - vs[1].value;
+    case "/":
+      return (vs) => vs[0].value / vs[1].value;
+    default:
+      throw new Error(`Unsupported operator type: ${operator}`);
+  }
+}
 
+function provideGradFn(operator: string): (vs: Variable[]) => void {
+  switch (operator) {
+    case "*":
+      return (vs) => { vs[0].gradient = vs[1].value; vs[1].gradient = vs[0].value; }
+    case "+":
+      return (vs) => { vs[0].gradient = 1; vs[1].gradient = 1; }
+    case "**":
+      return (vs) => { vs[0].gradient = vs[1].value * vs[0].value ** (vs[1].value - 1); vs[1].gradient = Math.log(vs[0].value) * vs[0].value ** vs[1].value; }
+    case "-":
+      return (vs) => { vs[0].gradient = 1; vs[1].gradient = -1; }
+    case "/":
+      return (vs) => { vs[0].gradient = 1 / vs[1].value; vs[1].gradient = -vs[0].value / (vs[1].value ** 2); }
+    default:
+      throw new Error(`Unsupported operator type: ${operator}`);
+  }
+}
 
+function provideNodeFns(operator: string): [NodeFns, NodeFns] {
+  return [provideComputeFn(operator), provideGradFn(operator)];
 }
 
 
-// This is still a forward pass, but we are using reverse mode.
-// This simply calculates the gradient of the child node with respect to its inputs.
-// It stores this partial derivative in the input nodes.
 
 // function _binCombine(left: Variable, operator: string, right: Variable): Variable {
 //   const operatorNode = new CompNode([left, right], new Variable(1, 1, 1))
