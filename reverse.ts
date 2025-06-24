@@ -63,18 +63,41 @@ export class CompNode extends GraphNode {
 
 }
 
-// function autograd(fwdPass: Function, rvPass: Function):
+
+export function makeGradFn(fn: (...params: any[]) => number): (...args: any[]) => Result {
+  const { body, params } = _parseGivenFunction(fn)
+  const argsOrder: string[] = params.map(p => (p as Identifier).name)
+  const context = createGraph(body)
+
+  return (...args: any) => {
+    if (args.length !== argsOrder.length) {
+      throw new Error(`Expected ${argsOrder.length} arguments, but got ${args.length}`);
+    }
+
+    context.args = Object.fromEntries(argsOrder.map((name, i) => [name, args[i]]))
+    fwdPass(context)
+    bwdPass(context)
+
+    return {
+      value: (context.ordering[context.ordering.length - 1] as Variable).value,
+      gradients: argsOrder.map(name => context.inputs[name].gradientAcc)
+    }
+  }
+}
 
 // from an AST, we generate the graph of compnodes
-// we create an environment to store the identifiers and use the same node to refer.
 
-function createGraph(parsedFn: { body: NodeType, params: Pattern[] }) {
-  // We start evaluating the first binary expression
+function createGraph(parsedFn: NodeType): Context {
+  const ctxt: Context = {
+    args: {},
+    inputs: {},
+    ordering: []
+  }
 
-  // helpers to evaluate variables, binary combinations, and math functions
+  _createGraphInternal(parsedFn, [], null, ctxt)
 
-  // return reference to the final output node
-
+  // return context
+  return ctxt
 }
 
 export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outgoing: GraphNode | null, ctxt: Context): Variable {
@@ -140,6 +163,7 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
 export function fwdPass(context: Context): Context {
   if (Object.keys(context.args).length === 0)
     throw new Error("Environment is empty");
+
   _fwdPassInternal(0, context);
   return context;
 }
@@ -152,6 +176,7 @@ function _fwdPassInternal(cur: number, context: Context): void {
   // calculates values for each node in the graph
   // calculate individual gradients per variable
   if (node instanceof Variable) {
+    node.gradientAcc = 0; // reset gradient accumulator
     if (node.name && node.name in context.args) {
       node.value = context.args[node.name] // get value from environment
       delete context.args[node.name] // prevent repeated assignment

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import { _createGraphInternal, _parseGivenFunction, bwdPass, CompNode, Context, fwdPass, GraphNode, Variable } from './reverse'
+import { makeGradFn } from './reverse';
 
 describe("given a binary expression function", () => {
   test("a graph should be initialised correctly", () => {
@@ -129,12 +130,39 @@ describe("given an ordering with repeated variables", () => {
     expect(context.inputs["x"].value).toBe(2)
   })
 
-  test("the backward pass works", () => {
+  test("the backward pass works consecutively", () => {
     fwdPass(context);
     bwdPass(context)
 
+    expect((context.ordering[context.ordering.length - 1] as Variable).value).toEqual(12)
     expect(context.inputs["x"].gradientAcc).toEqual(10)
     expect(context.inputs["y"].gradientAcc).toEqual(6)
+    expect("x" in context.args).toBeFalsy()
+
+    context.args["x"] = 3
+    context.args["y"] = 3
+
+    fwdPass(context);
+    bwdPass(context)
+
+    expect((context.ordering[context.ordering.length - 1] as Variable).value).toEqual(36)
+    expect(context.inputs["x"].gradientAcc).toEqual(21)
+    expect(context.inputs["y"].gradientAcc).toEqual(12)
   })
 
+})
+
+describe("given a function with repeated variable", () => {
+  test("able to create a gradient function", () => {
+    const fn = makeGradFn((x, y, z) => x + y * (z ** 2))
+    let res = fn(2, 3, 4)
+
+    expect(res.value).toEqual(50)
+    expect(res.gradients).toEqual([1, 16, 24])
+
+    res = fn(12, 12, 3)
+    expect(res.value).toEqual(120)
+    expect(res.gradients).toEqual([1, 9, 72])
+
+  })
 })
