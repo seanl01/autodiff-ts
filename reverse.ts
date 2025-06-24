@@ -6,13 +6,14 @@ import { Pattern, parse, Identifier, BinaryExpression, BlockStatement, ReturnSta
 // interface for primal/node/variable (value, gradient)
 // If we can account for two tracks at the same time, that would be good
 
-interface Context {
-  env: {[key: string]: number};
+export interface Context {
+  args: {[key: string]: number};
+  inputs: {[key: string]: Variable};
   ordering: GraphNode[]
 }
 
 class GraphNode {
-  public incoming: GraphNode[]
+  public incoming: [GraphNode, number][]
   public outgoing: GraphNode | null
   constructor() {
     this.incoming = [];
@@ -21,44 +22,45 @@ class GraphNode {
 }
 
 export class Variable extends GraphNode {
+  public gradientAcc: number
   constructor(
     public name: string | null,
     public value: number,
-    public gradient: number,
-    public gradientAcc: number
   ){
     super();
+    this.gradientAcc = 0;
   }
 
   static fromLiteral(value: number, outgoing: GraphNode) {
-    const node = new Variable(null, value, 0, 1);
+    const node = new Variable(null, value)
     node.outgoing = outgoing;
     return node;
   }
 
   static fromIdentifier(identifier: Identifier, outgoing: GraphNode) {
-    const node = new Variable(identifier.name, 0, 0, 1);
+    const node = new Variable(identifier.name, 0)
     node.outgoing = outgoing;
     return node;
   }
 
   static fromCompNode(compNode: CompNode) {
-    const node = new Variable(null, 0, 0, 1);
-    node.incoming = [compNode];
+    const node = new Variable(null, 0);
+    node.incoming = [[compNode, 1]];
     return node;
   }
 }
 
 export class CompNode extends GraphNode {
   public computeFn: (variables: Variable[]) => number;
-  public gradFn: (variable: Variable[]) => number; // reverse
+  public gradFn: (variable: Variable[]) => number[]; // reverse
 
   constructor(
   ) {
     super();
     this.computeFn = () => 0;
-    this.gradFn = () => 1;
+    this.gradFn = () => [1, 1];
   }
+
 }
 
 // function autograd(fwdPass: Function, rvPass: Function):
@@ -85,7 +87,16 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
       break;
 
     case "Identifier":
-      node = Variable.fromIdentifier(body as Identifier, outgoing as GraphNode);
+      const identifier = body as Identifier;
+
+      if (!ctxt.inputs.hasOwnProperty(identifier.name)) {
+        node = Variable.fromIdentifier(body as Identifier, outgoing as GraphNode);
+        ctxt.inputs[identifier.name] = node;
+      }
+      else {
+        node = ctxt.inputs[identifier.name] // already evaluated
+        return node;
+      }
       break;
 
     case "BinaryExpression":
@@ -96,7 +107,7 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
       const leftNode = _createGraphInternal((body as BinaryExpression).left, [], comp, ctxt);
       const rightNode = _createGraphInternal((body as BinaryExpression).right, [], comp, ctxt);
 
-      comp.incoming = [leftNode, rightNode]
+      comp.incoming = [[leftNode, 1], [rightNode, 1]]
 
       const operator = (body as BinaryExpression).operator;
       // bind computation and backward gradient functions to compnode
@@ -127,7 +138,7 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
 
 // given: topological ordering
 export function fwdPass(context: Context): Context {
-  if (Object.keys(context.env).length === 0)
+  if (Object.keys(context.args).length === 0)
     throw new Error("Environment is empty");
   _fwdPassInternal(0, context);
   return context;
@@ -141,20 +152,27 @@ function _fwdPassInternal(cur: number, context: Context): void {
   // calculates values for each node in the graph
   // calculate individual gradients per variable
   if (node instanceof Variable) {
-    if (node.name)
-      node.value = context.env[node.name] // get value from environment
+    if (node.name && node.name in context.args) {
+      node.value = context.args[node.name] // get value from environment
+      delete context.args[node.name] // prevent repeated assignment
+    }
   }
 
   else if (node instanceof CompNode) {
-    const inputs = node.incoming as Variable[];
+    const inputs = node.incoming.map(([v, _]) => v) as Variable[];
+
     const value = node.computeFn(inputs) // evaluate the compnode
-    node.gradFn(inputs) // calculate gradients
+    // Run gradient function
+    const grads = node.gradFn(inputs)
+    // assign grads to incoming
+    grads.forEach((grad, i) => {
+      node.incoming[i][1] = grad;
+    })
 
     if (node.outgoing)
       (node.outgoing as Variable).value = value // set the value of the outgoing variable
     else
       throw new Error("CompNode has no outgoing variable to set value for");
-
   }
 
   else {
@@ -173,12 +191,13 @@ export function bwdPass(context: Context): Context {
 }
 
 function _bwdPassInternal(node: Variable): void {
-  // If node has compNode
-  if (node.incoming.length > 0) {
-    const compNode = node.incoming[0] as CompNode;
-    for (const input of compNode.incoming) {
+  // If node from compNode
+  if (node.incoming.length == 1 && node.incoming[0][0] instanceof CompNode) {
+    const compNode = node.incoming[0][0];
+
+    for (const [input, grad] of compNode.incoming) {
       const inputVariable = input as Variable
-      inputVariable.gradientAcc = node.gradientAcc * inputVariable.gradient // accumulate gradients backward
+      inputVariable.gradientAcc += node.gradientAcc * grad // accumulate gradients backward
 
       _bwdPassInternal(inputVariable) // recursively for each input
     }
@@ -233,24 +252,29 @@ function provideComputeFn(operator: string): (vs: Variable[]) => number {
   }
 }
 
-function provideGradFn(operator: string): (vs: Variable[]) => void {
+/**
+ * @description Provides the gradient function for a given operator.
+ * @param operator The operator for which the gradient function is provided.
+ * @returns The gradient function for the given operator which returns a pair of gradient values
+ */
+function provideGradFn(operator: string): (vs: Variable[]) => number[] {
   // the individual gradients (partial derivative ∂comp/∂left and ∂comp/∂right) are calculated by "swiching on and off" the other variable
   switch (operator) {
     case "*":
-      return (vs) => { vs[0].gradient = vs[1].value; vs[1].gradient = vs[0].value; }
+      return (vs) => [vs[1].value, vs[0].value];
     case "+":
-      return (vs) => { vs[0].gradient = 1; vs[1].gradient = 1; }
+      return (vs) => [1, 1];
     case "**":
-      return (vs) => { vs[0].gradient = vs[1].value * vs[0].value ** (vs[1].value - 1); vs[1].gradient = Math.log(vs[0].value) * vs[0].value ** vs[1].value; }
+      return (vs) => [vs[1].value * vs[0].value ** (vs[1].value - 1), Math.log(vs[0].value) * vs[0].value ** vs[1].value];
     case "-":
-      return (vs) => { vs[0].gradient = 1; vs[1].gradient = -1; }
+      return (vs) => [1, -1];
     case "/":
-      return (vs) => { vs[0].gradient = 1 / vs[1].value; vs[1].gradient = -vs[0].value / (vs[1].value ** 2); }
+      return (vs) => [1 / vs[1].value, -vs[0].value / (vs[1].value ** 2)];
     default:
       throw new Error(`Unsupported operator type: ${operator}`);
   }
 }
 
-function provideNodeFns(operator: string): [NodeFns, NodeFns] {
-  return [provideComputeFn(operator), provideGradFn(operator)];
+function provideNodeFns(operator: string) {
+  return [provideComputeFn(operator), provideGradFn(operator)] as const;
 }
