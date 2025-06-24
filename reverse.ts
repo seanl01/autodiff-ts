@@ -126,13 +126,14 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
 // It stores this partial derivative in the input nodes.
 
 // given: topological ordering
-export function fwdPass(context: Context) {
+export function fwdPass(context: Context): Context {
   if (Object.keys(context.env).length === 0)
     throw new Error("Environment is empty");
   _fwdPassInternal(0, context);
+  return context;
 }
 
-function _fwdPassInternal(cur: number, context: Context) {
+function _fwdPassInternal(cur: number, context: Context): void {
   if (cur >= context.ordering.length) return;
 
   let node = context.ordering[cur];
@@ -161,6 +162,27 @@ function _fwdPassInternal(cur: number, context: Context) {
   }
 
   _fwdPassInternal(cur + 1, context)
+}
+
+export function bwdPass(context: Context): Context {
+  const outputNode = context.ordering[context.ordering.length - 1] as Variable;
+  outputNode.gradientAcc = 1; // set the gradient accumulator for the output node to 1
+
+  _bwdPassInternal(outputNode)
+  return context;
+}
+
+function _bwdPassInternal(node: Variable): void {
+  // If node has compNode
+  if (node.incoming.length > 0) {
+    const compNode = node.incoming[0] as CompNode;
+    for (const input of compNode.incoming) {
+      const inputVariable = input as Variable
+      inputVariable.gradientAcc = node.gradientAcc * inputVariable.gradient // accumulate gradients backward
+
+      _bwdPassInternal(inputVariable) // recursively for each input
+    }
+  }
 }
 
 export function _parseGivenFunction(fn: (...args: any[]) => number): { body: NodeType, params: Pattern[] } {
@@ -212,6 +234,7 @@ function provideComputeFn(operator: string): (vs: Variable[]) => number {
 }
 
 function provideGradFn(operator: string): (vs: Variable[]) => void {
+  // the individual gradients (partial derivative ∂comp/∂left and ∂comp/∂right) are calculated by "swiching on and off" the other variable
   switch (operator) {
     case "*":
       return (vs) => { vs[0].gradient = vs[1].value; vs[1].gradient = vs[0].value; }
@@ -231,64 +254,3 @@ function provideGradFn(operator: string): (vs: Variable[]) => void {
 function provideNodeFns(operator: string): [NodeFns, NodeFns] {
   return [provideComputeFn(operator), provideGradFn(operator)];
 }
-
-
-
-// function _binCombine(left: Variable, operator: string, right: Variable): Variable {
-//   const operatorNode = new CompNode([left, right], new Variable(1, 1, 1))
-//   switch (operator) {
-//     case "*":
-//       left.gradient = right.value
-//       right.gradient = left.value
-//       operatorNode.output.value = left.value * right.value
-//       break;
-//     case "+":
-//       left.gradient = 1
-//       right.gradient = 1
-//       operatorNode.output.value = left.value + right.value
-//       break;
-//     case "**":
-//       left.gradient = right.value ** (right.value - 1)
-//       right.gradient = left.value ** right.value * Math.log(left.value)
-//       operatorNode.output.value = left.value + right.value
-//       break;
-//     case "-":
-//       left.gradient = 1
-//       right.gradient = -1
-//       operatorNode.output.value = left.value - right.value
-//       break;
-//     default:
-//       throw new Error(`Unsupported binary operator: ${operator}`)
-//   }
-
-//   return operatorNode.output;
-// }
-
-// function reverseModeMath(node: CompNode, expr: MathExpression): CompNode {
-//   const childNode = new CompNode(0, 0, [node]);
-//   const args = expr.arguments;
-
-//   switch (expr.callee.property.name) {
-//     case "log":
-//       childNode.value = Math.log(node.value)
-//       childNode.gradient =
-//       break;
-
-//     case "sin":
-//       table[counter] = [Math.sin(val), (Math.cos(val) * der)]
-//       break;
-
-//     case "sqrt":
-//       table[counter] = _binCombine([val, der], "**", [1 / 2, 0])
-//       break;
-
-//     case "pow":
-//       [key, counter] = fwdPass(args[1], table, counter)
-//       let [rightVal, rightDer] = table[key]
-//       table[counter] = _binCombine([val, der], "**", [rightVal, rightDer])
-//       break;
-
-//     default:
-//       throw new Error(`Unsupported math function: ${expr.callee.property.name.toString()}`)
-//   }
-// }

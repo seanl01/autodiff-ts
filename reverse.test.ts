@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest';
-import { _createGraphInternal, _parseGivenFunction, CompNode, fwdPass, GraphNode, Variable } from './reverse'
+import { beforeEach, describe, expect, test } from 'vitest';
+import { _createGraphInternal, _parseGivenFunction, bwdPass, CompNode, fwdPass, GraphNode, Variable } from './reverse'
 
 describe("given a binary expression function", () => {
   test("a graph should be initialised correctly", () => {
@@ -54,16 +54,68 @@ describe("given a three-term function", () => {
   })
 })
 
+function provideTestOrdering() {
+  const ordering = []
+
+// Create a simple equation (x + y) ** 2 + x
+
+  // Create variables
+  const x = new Variable("x", 2);
+  const y = new Variable("y", 3);
+
+  // (x + y)
+  const sumNode = new CompNode();
+
+  x.outgoing = sumNode;
+  y.outgoing = sumNode;
+
+  // (x + y) ** 2
+  const constantTwo = new Variable("2", 2);
+  const powNode = new CompNode("**", [sumNode, constantTwo], function computeFn() {},function gradFn() {});
+
+  sumNode.outgoing = powNode;
+
+  // (x + y) ** 2 + x
+  const finalNode = new CompNode("+", [powNode, x], function computeFn() {},function gradFn() {});
+
+  powNode.outgoing = finalNode;
+
+  // x has two outgoing connections, we handle this by keeping the last one
+  x.outgoing = finalNode;
+
+  // Populate the ordering array
+  ordering.push(x, y, sumNode, constantTwo, powNode, finalNode);
+
+  return ordering;
+}
+
 describe("given an ordering", () => {
-  test("the forward pass works", () => {
-    const { body } = _parseGivenFunction((x: number, y: number) => x * y + 3)
-    const context = { env: {x: 2, y: 2}, ordering: []}
+  let context: { env: Record<string, number>; ordering: GraphNode[] };
+  const { body } = _parseGivenFunction((x: number, y: number) => (x**2 * y) + 3)
+
+  beforeEach(() => {
+    context = { env: {x: 2, y: 2}, ordering: []}
     _createGraphInternal(body, [], null, context);
+  })
 
+  test("the forward pass works", () => {
     fwdPass(context)
-
     console.log("ordering", context.ordering)
-    expect(context.ordering.slice(-1)[0].value).toEqual(7)
+    expect(context.ordering.slice(-1)[0].value).toEqual(11)
+  })
+
+  test("the backward pass works", () => {
+    fwdPass(context);
+    bwdPass(context)
+
+    const firstNode = context.ordering[0] as Variable
+    expect(firstNode.gradientAcc).toEqual(8)
+
+    console.log("firstNode", firstNode)
+
+    // y variable
+    console.log("y", context.ordering[4])
+    expect(context.ordering[4].gradientAcc).toEqual(4)
   })
 
 })
