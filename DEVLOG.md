@@ -1,3 +1,14 @@
+## 26 Jun 2025
+### Log
+- Refactored addCompNode function for repeated logic of creating compNode and binding dependencies
+  - same pattern of creating graph nodes for input arguments (evaluating), then binding incoming and outgoing accordingly
+
+## 25 Jun 2025
+
+### Issues
+- Need to implement handling of variable dependencies to a Math CallExpression. How does the data flow?
+- Need to handle non-variabe inputs to the function by converting to binary expression for pow, for example.
+
 ## 24 Jun 2025 Part II
 ### Log
 - Implemented reverse pass

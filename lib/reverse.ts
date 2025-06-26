@@ -1,13 +1,7 @@
-// class that computational node info
-// can we use the same forward pass?
-
-import { Pattern, parse, Identifier, BinaryExpression, BlockStatement, ReturnStatement, Expression, ExpressionStatement, ArrowFunctionExpression, Function as FunctionType, Node as NodeType, Literal } from "acorn";
+import { Pattern, parse, Identifier, BinaryExpression, BlockStatement, ReturnStatement, Expression, ExpressionStatement, ArrowFunctionExpression, Function as FunctionType, Node as NodeType, Literal, CallExpression, MemberExpression } from "acorn";
 import { Variable, CompNode, GraphNode } from "./classes";
-import { Result } from "./types";
+import { MathExpression, Result } from "./types";
 import { provideNodeFns } from "./nodeFns";
-// import { MathExpression } from "./types";
-// interface for primal/node/variable (value, gradient)
-// If we can account for two tracks at the same time, that would be good
 
 export interface Context {
   args: { [key: string]: number };
@@ -19,26 +13,26 @@ export interface Context {
 export function makeGradFn(fn: (...params: any[]) => number): (...args: any[]) => Result {
   const { body, params } = _parseGivenFunction(fn)
   const argsOrder: string[] = params.map(p => (p as Identifier).name)
-  const context = createGraph(body)
+  const ctxt = createGraph(body)
 
   return (...args: any) => {
     if (args.length !== argsOrder.length) {
       throw new Error(`Expected ${argsOrder.length} arguments, but got ${args.length}`);
     }
 
-    context.args = Object.fromEntries(argsOrder.map((name, i) => [name, args[i]]))
-    fwdPass(context)
-    bwdPass(context)
+    ctxt.args = Object.fromEntries(argsOrder.map((name, i) => [name, args[i]]))
+    fwdPass(ctxt)
+    bwdPass(ctxt)
 
-    return {
-      value: (context.ordering[context.ordering.length - 1] as Variable).value,
-      gradients: argsOrder.map(name => context.inputs[name].gradientAcc)
-    }
+    const value = (ctxt.ordering[ctxt.ordering.length - 1] as Variable).value
+    const gradients = argsOrder.map(name => ctxt.inputs[name].gradientAcc)
+
+    return { value, gradients }
   }
 }
 
-// from an AST, we generate the graph of compnodes
 
+// from an AST, we generate the graph of variables and CompNodes
 function createGraph(parsedFn: NodeType): Context {
   const ctxt: Context = {
     args: {},
@@ -48,7 +42,6 @@ function createGraph(parsedFn: NodeType): Context {
 
   _createGraphInternal(parsedFn, [], null, ctxt)
 
-  // return context
   return ctxt
 }
 
@@ -56,7 +49,6 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
   let node;
 
   switch (body.type) {
-    // same handler for Literal and Identifier
     case "Literal":
       node = Variable.fromLiteral((body as Literal).value as number, outgoing as GraphNode)
       break;
@@ -75,29 +67,13 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
       break;
 
     case "BinaryExpression":
-      const comp = new CompNode()
-
-      // evaluate left side and right side
-      // connect left/right node's outgoing to compnode, and compnode's incoming to left/right node
-      const leftNode = _createGraphInternal((body as BinaryExpression).left, [], comp, ctxt);
-      const rightNode = _createGraphInternal((body as BinaryExpression).right, [], comp, ctxt);
-
-      comp.incoming = [[leftNode, 1], [rightNode, 1]]
-
-      const operator = (body as BinaryExpression).operator;
-      // bind computation and backward gradient functions to compnode
-      const [computeFn, gradFn] = provideNodeFns(operator)
-      comp.computeFn = computeFn;
-      comp.gradFn = gradFn;
-
-      // compNode result variable
-      ctxt.ordering.push(comp);
-      node = Variable.fromCompNode(comp); // output variable
-      comp.outgoing = node
+      const { left, right, operator } = body as BinaryExpression;
+      node = addCompNode([left, right], operator, ctxt)
       break;
 
     case "CallExpression":
-
+      node = _encodeCallExpression(body as CallExpression, [], null, ctxt)
+      break;
 
     default:
       throw new Error(`Unsupported node type: ${body.type}`);
@@ -105,6 +81,41 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
 
   ctxt.ordering.push(node);
   return node;
+}
+
+
+function addCompNode(inputs: NodeType[], operator: string, ctxt: Context): Variable {
+  const comp = new CompNode();
+  const inputNodes: [GraphNode, number][] = inputs.map(input => [_createGraphInternal(input, [], comp, ctxt), 1])
+
+  comp.incoming = inputNodes
+
+  // bind computation and backward gradient functions to compnode
+  const [computeFn, gradFn] = provideNodeFns(operator)
+  comp.computeFn = computeFn;
+  comp.gradFn = gradFn;
+
+  // compNode result variable
+  ctxt.ordering.push(comp);
+  const node = Variable.fromCompNode(comp); // output variable
+  comp.outgoing = node
+
+  return node
+}
+
+
+function _encodeCallExpression(expr: CallExpression, incoming: GraphNode[], outgoing: GraphNode | null, ctxt: Context): Variable {
+  const callee = expr.callee
+  switch (callee.type) {
+    case "MemberExpression":
+      if (callee.object.type === "Identifier" && callee.object.name === "Math") {
+        const mathExpr = expr as MathExpression
+        return addCompNode(mathExpr.arguments, mathExpr.callee.property.name as string, ctxt)
+      }
+
+    default:
+      throw new Error(`Unsupported callee type: ${callee.type}`);
+  }
 }
 
 // TODO: fill values
@@ -115,26 +126,27 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
 // It stores this partial derivative in the input nodes.
 
 // given: topological ordering
-export function fwdPass(context: Context): Context {
-  if (Object.keys(context.args).length === 0)
+export function fwdPass(ctxt: Context): Context {
+  if (Object.keys(ctxt.args).length === 0)
     throw new Error("Environment is empty");
 
-  _fwdPassInternal(0, context);
-  return context;
+  _fwdPassInternal(0, ctxt);
+  return ctxt;
 }
 
-function _fwdPassInternal(cur: number, context: Context): void {
-  if (cur >= context.ordering.length) return;
+function _fwdPassInternal(cur: number, ctxt: Context): void {
+  if (cur >= ctxt.ordering.length) return;
 
-  let node = context.ordering[cur];
+  let node = ctxt.ordering[cur];
 
   // calculates values for each node in the graph
-  // calculate individual gradients per variable
+  // then calculate elementary gradients for each variable-compnode
+
   if (node instanceof Variable) {
     node.gradientAcc = 0; // reset gradient accumulator
-    if (node.name && node.name in context.args) {
-      node.value = context.args[node.name] // get value from environment
-      delete context.args[node.name] // prevent repeated assignment
+    if (node.name && node.name in ctxt.args) {
+      node.value = ctxt.args[node.name] // get value from environment
+      delete ctxt.args[node.name] // prevent repeated assignment
     }
   }
 
@@ -159,15 +171,15 @@ function _fwdPassInternal(cur: number, context: Context): void {
     throw new Error(`Unsupported node type in forward pass: ${node.constructor.name}`);
   }
 
-  _fwdPassInternal(cur + 1, context)
+  _fwdPassInternal(cur + 1, ctxt)
 }
 
-export function bwdPass(context: Context): Context {
-  const outputNode = context.ordering[context.ordering.length - 1] as Variable;
+export function bwdPass(ctxt: Context): Context {
+  const outputNode = ctxt.ordering[ctxt.ordering.length - 1] as Variable;
   outputNode.gradientAcc = 1; // set the gradient accumulator for the output node to 1
 
   _bwdPassInternal(outputNode)
-  return context;
+  return ctxt;
 }
 
 function _bwdPassInternal(node: Variable): void {

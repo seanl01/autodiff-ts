@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { _evalCallExpr, _evalMathExpr, makeGradFn } from '.';
+import { _evalCallExpr, _evalMathExpr, makeGradFn } from './lib/forward';
 import { ExpressionStatement, parse } from 'acorn';
-import { MathExpression, Table } from './types';
+import { MathExpression, Table } from './lib/types';
 
 
 describe('given a call expr', () => {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { _createGraphInternal, _parseGivenFunction, bwdPass, Context, fwdPass } from './reverse'
-import { makeGradFn } from './reverse';
+import { _parseGivenFunction, bwdPass, Context, fwdPass } from './reverse'
+import { makeGradFn, _createGraphInternal } from './reverse';
 import { CompNode, GraphNode, Variable } from './classes';
 
 describe("given a binary expression function", () => {
@@ -31,14 +31,14 @@ describe("given a three-term function", () => {
     const fn = (x: number, y: number) => x * y + 3
     const { body } = _parseGivenFunction(fn)
 
-    const ordering: GraphNode = []
+    const ordering: GraphNode[] = []
     _createGraphInternal(body, [], null, { args: {}, ordering, inputs: {} })
 
     console.log("ordering", ordering)
 
     expect(ordering.length).toBe(7)
-    expect(ordering[0].name).toBe("x")
-    expect(ordering[1].name).toBe("y")
+    expect((ordering[0] as Variable).name).toBe("x")
+    expect((ordering[1] as Variable).name).toBe("y")
     expect(ordering[2].incoming[0][0]).toBe(ordering[0])
     expect(ordering[2].incoming[1][0]).toBe(ordering[1])
 
@@ -143,7 +143,8 @@ describe("given a function with math functions", () => {
 
     res = fn(0, 0)
     expect(res.value).toEqual(1)
-    expect(res.gradients).toEqual([Math.cos(0), -Math.sin(0)])
+    expect(res.gradients[0]).toEqual(Math.cos(0))
+    expect(res.gradients[1]).toEqual(Math.abs(-Math.sin(0))) // -0 and 0 bug
   })
 
 })

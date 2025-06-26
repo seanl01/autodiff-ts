@@ -1,5 +1,11 @@
-import { Variable } from "./classes";
-import { ComputeFnStore, Fn } from "./types";
+import { ComputeFnStore, Fn, GradFnStore as ElemGradFnStore } from "./types";
+
+function provideFn<R extends number | number[]>(operator: string, store: Record<string, Fn<R>>): Fn<R> {
+  if (operator in store)
+    return store[operator]
+
+  throw new Error(`Unsupported operator type: ${operator}`);
+}
 
 const mathOperators: ComputeFnStore = {
   "*": (vs) => vs[0].value * vs[1].value,
@@ -10,46 +16,35 @@ const mathOperators: ComputeFnStore = {
 };
 
 const mathFns: ComputeFnStore = {
-  "Math.pow": (vs) => Math.pow(vs[0].value, vs[1].value),
-  "Math.sin": (vs) => Math.sin(vs[0].value),
-  "Math.cos": (vs) => Math.cos(vs[0].value),
-  "Math.tan": (vs) => Math.tan(vs[0].value),
-  "Math.log": (vs) => Math.log(vs[0].value),
-  "Math.exp": (vs) => Math.exp(vs[0].value)
+  "pow": (vs) => Math.pow(vs[0].value, vs[1].value),
+  "sin": (vs) => Math.sin(vs[0].value),
+  "cos": (vs) => Math.cos(vs[0].value),
+  "tan": (vs) => Math.tan(vs[0].value),
+  "log": (vs) => Math.log(vs[0].value),
+  "exp": (vs) => Math.exp(vs[0].value)
+};
+
+
+const gradOperators: ElemGradFnStore = {
+  "*": (vs) => [vs[1].value, vs[0].value],
+  "+": (vs) => [1, 1],
+  "**": (vs) => [vs[1].value * vs[0].value ** (vs[1].value - 1), Math.log(vs[0].value) * vs[0].value ** vs[1].value],
+  "-": (vs) => [1, -1],
+  "/": (vs) => [1 / vs[1].value, -vs[0].value / (vs[1].value ** 2)]
+};
+
+const gradMathFns: ElemGradFnStore = {
+  "pow": (vs) => [vs[1].value * vs[0].value ** (vs[1].value - 1), Math.log(vs[0].value) * vs[0].value ** vs[1].value],
+  "sin": (vs) => [Math.cos(vs[0].value)],
+  "cos": (vs) => [-Math.sin(vs[0].value)],
+  "tan": (vs) => [1 / Math.cos(vs[0].value) ** 2],
+  "log": (vs) => [1 / vs[0].value],
+  "exp": (vs) => [Math.exp(vs[0].value)]
 };
 
 const computeFns = { ...mathOperators, ...mathFns }
-
-function provideFn<R extends number | number[]>(operator: string, store: Record<string, Fn<R>>): Fn<R> {
-  if (operator in store)
-    return store[operator]
-
-  throw new Error(`Unsupported operator type: ${operator}`);
-}
-
-/**
- * @description Provides the gradient function for a given operator.
- * @param symbol The operator for which the gradient function is provided.
- * @returns The gradient function for the given operator which returns a pair of gradient values
- */
-function provideGradFn(symbol: string): (vs: Variable[]) => number[] {
-  // the individual gradients (partial derivative ∂comp/∂left and ∂comp/∂right) are calculated by "swiching on and off" the other variable
-  switch (symbol) {
-    case "*":
-      return (vs) => [vs[1].value, vs[0].value];
-    case "+":
-      return (vs) => [1, 1];
-    case "**":
-      return (vs) => [vs[1].value * vs[0].value ** (vs[1].value - 1), Math.log(vs[0].value) * vs[0].value ** vs[1].value];
-    case "-":
-      return (vs) => [1, -1];
-    case "/":
-      return (vs) => [1 / vs[1].value, -vs[0].value / (vs[1].value ** 2)];
-    default:
-      throw new Error(`Unsupported operator type: ${symbol}`);
-  }
-}
+const gradFns = { ...gradOperators, ...gradMathFns };
 
 export function provideNodeFns(operator: string) {
-  return [provideFn(operator, computeFns), provideGradFn(operator)] as const;
+  return [provideFn(operator, computeFns), provideFn(operator, gradFns)] as const;
 }
