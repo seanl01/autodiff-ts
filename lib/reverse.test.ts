@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { _parseGivenFunction, bwdPass, Context, fwdPass } from './reverse'
+import { parseGivenFunction, bwdPass, Context, fwdPass } from './reverse'
 import { makeGradFn, _createGraphInternal } from './reverse';
 import { CompNode, GraphNode, Variable } from './classes';
 
 describe("given a binary expression function", () => {
   test("a graph should be initialised correctly", () => {
     const fn = (x: number, y: number) => x * y
-    const { body } = _parseGivenFunction(fn)
+    const { body } = parseGivenFunction(fn)
 
     const res = _createGraphInternal(body, [], null, { args: {}, ordering: [], inputs: {} })
 
@@ -29,7 +29,7 @@ describe("given a binary expression function", () => {
 describe("given a three-term function", () => {
   test("the topological order is correct", () => {
     const fn = (x: number, y: number) => x * y + 3
-    const { body } = _parseGivenFunction(fn)
+    const { body } = parseGivenFunction(fn)
 
     const ordering: GraphNode[] = []
     _createGraphInternal(body, [], null, { args: {}, ordering, inputs: {} })
@@ -58,7 +58,7 @@ describe("given a three-term function", () => {
 
 describe("given an ordering", () => {
   let context: Context
-  const { body } = _parseGivenFunction((x: number, y: number) => (x**2 * y) + 3)
+  const { body } = parseGivenFunction((x: number, y: number) => (x**2 * y) + 3)
 
   beforeEach(() => {
     context = { args: {x: 2, y: 2}, ordering: [], inputs: {}}
@@ -83,7 +83,7 @@ describe("given an ordering", () => {
 
 describe("given an ordering with repeated variables", () => {
   let context: Context
-  const { body } = _parseGivenFunction((x: number, y: number) => (x**2 * y) + x * y)
+  const { body } = parseGivenFunction((x: number, y: number) => (x**2 * y) + x * y)
 
   beforeEach(() => {
     context = { args: {x: 2, y: 2}, ordering: [], inputs: {}}

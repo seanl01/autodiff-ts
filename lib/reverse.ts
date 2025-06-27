@@ -10,8 +10,13 @@ export interface Context {
 }
 
 
+/**
+ * Creates a gradient function for a given function.
+ * @param fn - function to create gradient function for
+ * @returns a function that takes arguments and returns the value and gradients
+ */
 export function makeGradFn(fn: (...params: any[]) => number): (...args: any[]) => Result {
-  const { body, params } = _parseGivenFunction(fn)
+  const { body, params } = parseGivenFunction(fn)
   const argsOrder: string[] = params.map(p => (p as Identifier).name)
   const ctxt = createGraph(body)
 
@@ -32,7 +37,11 @@ export function makeGradFn(fn: (...params: any[]) => number): (...args: any[]) =
 }
 
 
-// from an AST, we generate the graph of variables and CompNodes
+/**
+ * From an AST, we generate the graph of variables and CompNodes
+ * @param parsedFn - the parsed function body
+ * @returns a context objecting containing the graph structure and inputs
+ */
 function createGraph(parsedFn: NodeType): Context {
   const ctxt: Context = {
     args: {},
@@ -84,6 +93,13 @@ export function _createGraphInternal(body: NodeType, incoming: GraphNode[], outg
 }
 
 
+/**
+ * Adds a computation node to the graph.
+ * @param inputs - the input nodes to the computation
+ * @param operator - the operator for the computation (e.g., "+", "*", "sin", etc.)
+ * @param ctxt - the context containing the graph structure and inputs
+ * @returns a Variable representing the output of the computation
+ */
 function addCompNode(inputs: NodeType[], operator: string, ctxt: Context): Variable {
   const comp = new CompNode();
   const inputNodes: [GraphNode, number][] = inputs.map(input => [_createGraphInternal(input, [], comp, ctxt), 1])
@@ -104,6 +120,14 @@ function addCompNode(inputs: NodeType[], operator: string, ctxt: Context): Varia
 }
 
 
+/**
+ * Places the call expression into the graph.
+ * @param expr - the CallExpression to encode
+ * @param incoming - the incoming graph nodes
+ * @param outgoing - the outgoing graph node (if any)
+ * @param ctxt - the context object for the graph
+ * @returns a Variable representing the result of the call expression
+ */
 function _encodeCallExpression(expr: CallExpression, incoming: GraphNode[], outgoing: GraphNode | null, ctxt: Context): Variable {
   const callee = expr.callee
   switch (callee.type) {
@@ -118,14 +142,11 @@ function _encodeCallExpression(expr: CallExpression, incoming: GraphNode[], outg
   }
 }
 
-// TODO: fill values
-// initialise an environment
-// for each param, we store in environment
-// This is still a forward pass, but we are using reverse mode.
-// This simply calculates the gradient of the child node with respect to its inputs.
-// It stores this partial derivative in the input nodes.
-
-// given: topological ordering
+/**
+ * Performs a forward pass through the graph, evaluating nodes in topological order.
+ * @param ctxt
+ * @returns context object
+ */
 export function fwdPass(ctxt: Context): Context {
   if (Object.keys(ctxt.args).length === 0)
     throw new Error("Environment is empty");
@@ -174,6 +195,11 @@ function _fwdPassInternal(cur: number, ctxt: Context): void {
   _fwdPassInternal(cur + 1, ctxt)
 }
 
+/**
+ * Performs a backward pass through the graph, accumulating gradients in reverse topological order.
+ * @param ctxt - Context object
+ * @returns Context object
+ */
 export function bwdPass(ctxt: Context): Context {
   const outputNode = ctxt.ordering[ctxt.ordering.length - 1] as Variable;
   outputNode.gradientAcc = 1; // set the gradient accumulator for the output node to 1
@@ -196,7 +222,12 @@ function _bwdPassInternal(node: Variable): void {
   }
 }
 
-export function _parseGivenFunction(fn: (...args: any[]) => number): { body: NodeType, params: Pattern[] } {
+/**
+ * Parses the given function into an AST and extracts the body and parameters.
+ * @param fn - a function to parse into an AST
+ * @returns an object containing the function body and parameters
+ */
+export function parseGivenFunction(fn: (...args: any[]) => number): { body: NodeType, params: Pattern[] } {
   // evaluates both normal function declarations and arrow functions
   let funcExpr = (parse(fn.toString(), { ecmaVersion: 7 })
     .body[0])
