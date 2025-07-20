@@ -1,9 +1,14 @@
 {
   "name": "autodiff-ts",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "build": "tsup index.ts --format cjs,esm --dts"
   },
   "author": "",
   "license": "ISC",
@@ -12,6 +17,7 @@
     "@types/node": "^24.0.3",
     "acorn": "^8.14.1",
     "acorn-walk": "^8.3.4",
+    "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2"
   }
