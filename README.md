@@ -1,7 +1,7 @@
 # autodiff-ts 📈
 
 ## Overview
-`autodiff-ts` is a TypeScript implementation of automatic differentiation. Automatic Differentiation (AD) (TODO: add citation) is a technique for computationally determining the gradient of a function with respect to its inputs, for a certain point. It strikes a balance between the precision of symbolic differentiation and the efficiency of numerical differentiation. Differentation is a crucial part of many machine learning algorithms and optimization problems.
+`autodiff-ts` is a TypeScript implementation of automatic differentiation. Automatic Differentiation (AD) [^1] is a technique for computationally determining the gradient of a function with respect to its inputs. It strikes a balance between the precision of symbolic differentiation and the efficiency of numerical differentiation. Differentation is a crucial part of many machine learning algorithms and optimization problems.
 
 It provides a simple function factory `makeGradFn` that generates a gradient function for a user-provided pure function. The user-provided function can include multiple scalar outputs, arithmetic operations, and common mathematical functions and constants. The generated gradient function can be used to compute the gradient of the user-provided function at a specific point.
 
@@ -34,7 +34,7 @@ grad(3, 4)
 
 ### Reverse mode AD
 
-<img src="static/diagram.png" alt="diagram of reverse mode AD" width="60%" style="max-width:800px;">
+<img src="static/diagram.png" alt="diagram of reverse mode AD" width="80%" style="max-width:800px;">
 
 1. Reverse mode AD is the default choice (over forward mode AD) for many problems, as it reduces the repeated computation needed when an expression has multiple inputs but only one output.
    - Such expressions are common in many objective functions: e.g. a loss function for a neural network
@@ -63,7 +63,7 @@ grad(3, 4)
       inputVariable.gradientAcc += node.gradientAcc * grad // accumulate gradients backward
     ```
 
-    - Accumulating on a variable which already has a gradientAcc involves adding the new contribution to the current gradientAcc. This is to account for the multiple "branches" that this input variable takes on. This applies the generalised chain rule. [^1]
+    - Accumulating on a variable which already has a gradientAcc involves adding the new contribution to the current gradientAcc. This is to account for the multiple "branches" that this input variable takes on. This applies the generalised chain rule. [^2]
 
 1. We return the final output value in the form `{ value, gradients }`
 
@@ -82,9 +82,16 @@ grad(3, 4)
 1. We repeat the process for every input variable
 
 
-
-## Limitations
+## Epilogue
+### Acknowledgements
+This project was informed and inspired by a few key sources:
+- [*What's Automatic Differentiation?* by Andy Holmes](https://huggingface.co/blog/andmholm/what-is-automatic-differentiation)
+- [*Overview of PyTorch Autograd Engine* from the Pytorch Blog](https://pytorch.org/blog/overview-of-pytorch-autograd-engine/)
+- [*Reverse-mode automatic differentiation: a tutorial* from Rufflewind's Scratchpad](https://rufflewind.com/2016-12-30/reverse-mode-automatic-differentiation)
+- [*Automatic Differentiation & Transformers* from Matt Gormley's 10-301/10-601 course in Carnegie Mellon University](https://www.cs.cmu.edu/~mgormley/courses/10601-f23//slides/lecture18-transformer.pdf)
+### Limitations
 - Currently it only supports functions that accept scalars and not vectors
 - Currently no memoisation on the primals calculated is being done. i.e. every time we are calculating the final output gradient w.r.t. to another input variable, we end up calculating the node values again. These optimisations are central to the appeal of automatic differentiation.
 
-[^1]: In essence, the [Generalised chain rule for multiple variables](https://en.m.wikipedia.org/wiki/Chain_rule#Multivariable_case) tells us: if output $L$ depends on functions $u(t)$ and $z(t)$, which depend on $t$, then $$\frac{\partial L}{\partial t} = \frac{\partial L}{\partial u} * \frac{\partial u}{\partial t} + \frac{\partial L}{\partial z} * \frac{\partial z}{\partial t}$$
+[^1]: [Automatic differentiation in machine learning: a survey](https://arxiv.org/abs/1502.05767)
+[^2]: In essence, the [Generalised chain rule for multiple variables](https://en.m.wikipedia.org/wiki/Chain_rule#Multivariable_case) tells us: if output $L$ depends on functions $u(t)$ and $z(t)$, which depend on $t$, then $$\frac{\partial L}{\partial t} = \frac{\partial L}{\partial u} * \frac{\partial u}{\partial t} + \frac{\partial L}{\partial z} * \frac{\partial z}{\partial t}$$
