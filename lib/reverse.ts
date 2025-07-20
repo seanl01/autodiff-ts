@@ -106,7 +106,7 @@ function addCompNode(inputs: NodeType[], operator: string, ctxt: Context): Varia
 
   comp.incoming = inputNodes
 
-  // bind computation and backward gradient functions to compnode
+  // bind computation and elementary gradient functions to compnode
   const [computeFn, gradFn] = provideNodeFns(operator)
   comp.computeFn = computeFn;
   comp.gradFn = gradFn;
@@ -151,14 +151,13 @@ export function fwdPass(ctxt: Context): Context {
   if (Object.keys(ctxt.args).length === 0)
     throw new Error("Environment is empty");
 
-  _fwdPassInternal(0, ctxt);
+  for (const node of ctxt.ordering) {
+    _passNode(node, ctxt)
+  }
   return ctxt;
 }
 
-function _fwdPassInternal(cur: number, ctxt: Context): void {
-  if (cur >= ctxt.ordering.length) return;
-
-  let node = ctxt.ordering[cur];
+function _passNode(node: GraphNode, ctxt: Context) {
 
   // calculates values for each node in the graph
   // then calculate elementary gradients for each variable-compnode
@@ -177,7 +176,8 @@ function _fwdPassInternal(cur: number, ctxt: Context): void {
     const value = node.computeFn(inputs) // evaluate the compnode
     // Run gradient function
     const grads = node.gradFn(inputs)
-    // assign grads to incoming
+
+    // assign elementary grads to incoming
     grads.forEach((grad, i) => {
       node.incoming[i][1] = grad;
     })
@@ -191,8 +191,6 @@ function _fwdPassInternal(cur: number, ctxt: Context): void {
   else {
     throw new Error(`Unsupported node type in forward pass: ${node.constructor.name}`);
   }
-
-  _fwdPassInternal(cur + 1, ctxt)
 }
 
 /**
