@@ -137,12 +137,7 @@ export function _evalCallExpr(expr: CallExpression, table: Table, counter: numbe
       return _evalMathExpr(expr as MathExpression, table, counter);
 
   }
-
-
-
-  // evaluate args
-
-  //
+  throw new Error("Call expression not supported");
 }
 
 export function _evalMathExpr(expr: MathExpression, table: Table, counter: number): [string | number, number] {
