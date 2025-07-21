@@ -1,14 +1,14 @@
 # autodiff-ts 📈
 
 ## Overview
-`autodiff-ts` is a TypeScript implementation of automatic differentiation. Automatic Differentiation (AD) [^1] is a technique for computationally determining the gradient of a function with respect to its inputs. It strikes a balance between the precision of symbolic differentiation and the efficiency of numerical differentiation. Differentation is a crucial part of many machine learning algorithms and optimization problems.
+`autodiff-ts` is a TypeScript implementation of automatic differentiation. Automatic Differentiation (AD) [^1] is a technique for computationally determining the gradient of a function with respect to its inputs. It strikes a balance between the precision of symbolic differentiation and the efficiency of numerical differentiation. Differentiation is a crucial part of many machine learning algorithms and optimization problems.
 
-It provides a simple function factory `makeGradFn` that generates a gradient function for a user-provided pure function. The user-provided function can include multiple scalar outputs, arithmetic operations, and common mathematical functions and constants. The generated gradient function can be used to compute the gradient of the user-provided function at a specific point.
+It provides a simple function factory `makeGradFn` that generates a gradient function for a user-provided pure function. The user-provided function can include multiple scalar outputs, arithmetic operations, common mathematical functions and constants. The generated grad function can be used to compute the gradient of the user-provided function at a specific point.
 
 ## Installation and Usage
 
 ```sh
-npm install https://github.com/seanl01/autodiff-ts.git#public
+npm install autodiff-ts
 ```
 
 ```js
@@ -18,7 +18,7 @@ const f = (x, y) => y * x + x ** 2
 const grad = makeGradFn(f)
 
 ```
-For reference, $\frac{\partial f}{\partial x} = 2x + y$ and $\frac{\partial f}{\partial y} = x$.
+For function $f(x, y) = yx + x^2$, $\frac{\partial f}{\partial x} = 2x + y$ and $\frac{\partial f}{\partial y} = x$.
 
 ```js
 grad(1, 2)
@@ -37,13 +37,13 @@ grad(3, 4)
 <img src="static/diagram.png" alt="diagram of reverse mode AD" width="80%" style="max-width:800px;">
 
 1. Reverse mode AD is the default choice (over forward mode AD) for many problems, as it reduces the repeated computation needed when an expression has multiple inputs but only one output.
-   - Such expressions are common in many objective functions: e.g. a loss function for a neural network
+   - Such expressions are common in many objective functions: e.g. a loss function for a neural network.
    - Rather than computing the gradient for each input variable independently, we compute the gradient of the output with respect to each input variable in a single pass.
 
 1. We traverse the body expression of the user-provided function to build a computational graph which is an abstract representation of the function. The graph is made of
    - `Variable` nodes, which represent the input variables of the functions, as well as any intermediate inputs to any `CompNode`s
-     - These are "singleton" variables. a $x$ term appearing to in different parts of the given function will be reperesented by the same `Variable` object. This will be significant during the gradient accumulation happening in the backward pass later.
-   - `CompNode` nodes, which represent the computation nodes that perform arithmetic operations or mathematical functions on the input variables
+     - These are "singleton" variables. An $x$ term appearing in different parts of the given function will be represented by the same `Variable` object. This will be significant during the gradient accumulation happening in the backward pass later.
+   - `CompNode` nodes, which represent the computation nodes that perform arithmetic operations or mathematical functions on the input variables.
      - These take in a list of `Variable`, gradient (elementary) pairs, which represent the inputs to the computation node.
      - They output a variable node, which represents the output of the computation node and a possible input to another computation node.
      - We bind two functions to each `CompNode`:
@@ -51,13 +51,13 @@ grad(3, 4)
        - `gradFn`: which returns the elementary gradient of the output variable with respect to the input variables
    - As we evaluate the expresssion left-to-right, we also store the topological order of the nodes.
 
-1. We perform a forward pass to evaluate the function given new input values
+1. We perform a forward pass to evaluate the function given new input values.
    - We use the topological order of the nodes to ensure we evaluate the nodes in the correct order.
    - We use the computeFns at the ComputeNodes to evaluate the output nodes using the given inputs.
    - We use the gradFn to calculate the elementary gradient given the inputs for each ComputeNode, storing the values as "edges" between the input `Variable`s and the `ComputeNode`.
 
 1. Instead of accumulating the gradient on the forward pass using the chain rule, we accumulate the gradient on the backward pass.
-    - This requires setting the initial gradient (`gradientAcc`) as the output variable w.r.t to itself which is 1
+    - This requires setting the initial gradient (`gradientAcc`) as the output variable w.r.t to itself which is 1.
     - We then use the chain rule to accumulate the gradient backward (See diagram), multiplying the gradient of the edge with the current gradientAcc. storing the accumulated gradient at the `Variable` nodes.
     ```ts
       inputVariable.gradientAcc += node.gradientAcc * grad // accumulate gradients backward
