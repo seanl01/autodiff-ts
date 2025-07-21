@@ -1,8 +1,8 @@
 {
   "name": "autodiff-ts",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.cts",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "static"
@@ -22,8 +22,10 @@
     "@types/node": "^24.0.3",
     "acorn": "^8.14.1",
     "acorn-walk": "^8.3.4",
-    "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0"
   }
 }
