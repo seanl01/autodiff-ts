@@ -6,6 +6,10 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seanl01/autodiff-ts.git"
+  },
   "scripts": {
     "test": "vitest",
     "build": "tsup index.ts --format cjs,esm --dts"
