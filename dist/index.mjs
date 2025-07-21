@@ -230,7 +230,7 @@ function parseGivenFunction(fn) {
 import {
   parse as parse2
 } from "acorn";
-function makeGradFn2(fn) {
+function fwdMakeGradFn_unstable(fn) {
   const { body, params } = _evalPassedFunction(fn);
   return (...args) => {
     let value = null;
@@ -370,5 +370,5 @@ function _binCombine(left, operator, right) {
 }
 export {
   makeGradFn as default,
-  makeGradFn2 as fwdMakeGradFn_unstable
+  fwdMakeGradFn_unstable
 };

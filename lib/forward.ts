@@ -13,7 +13,7 @@ import { MathExpression, Table } from "./types";
 * @returns a wrapped version of the passed function that returns the standard value as well as the jacobian vector
 */
 
-export function makeGradFn(fn: (...args: any[]) => number): (...args: any[]) => never | { value: number, gradients: any[] } {
+export function fwdMakeGradFn_unstable(fn: (...args: any[]) => number): (...args: any[]) => never | { value: number, gradients: any[] } {
   const { body, params } = _evalPassedFunction(fn);
 
   return (...args) => {

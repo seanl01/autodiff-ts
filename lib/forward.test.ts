@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { _evalCallExpr, _evalMathExpr, makeGradFn } from './forward';
+import { _evalCallExpr, _evalMathExpr, fwdMakeGradFn_unstable } from './forward';
 import { ExpressionStatement, parse } from 'acorn';
 import { MathExpression, Table } from './types';
 

@@ -21,7 +21,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   default: () => makeGradFn,
-  fwdMakeGradFn_unstable: () => makeGradFn2
+  fwdMakeGradFn_unstable: () => fwdMakeGradFn_unstable
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -255,7 +255,7 @@ function parseGivenFunction(fn) {
 
 // lib/forward.ts
 var import_acorn2 = require("acorn");
-function makeGradFn2(fn) {
+function fwdMakeGradFn_unstable(fn) {
   const { body, params } = _evalPassedFunction(fn);
   return (...args) => {
     let value = null;

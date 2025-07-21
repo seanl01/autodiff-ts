@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { _evalCallExpr, _evalMathExpr, makeGradFn } from './lib/forward';
+import { _evalCallExpr, _evalMathExpr, fwdMakeGradFn_unstable } from './lib/forward';
 import { ExpressionStatement, parse } from 'acorn';
 import { MathExpression, Table } from './lib/types';
 
@@ -38,19 +38,19 @@ describe('given a call expr', () => {
 
 describe("given a function expression", () => {
   test("when a unary arrow function is given, then it should return a valid function", () => {
-    const { value, gradients } = makeGradFn((x) => x + 3)(3)
+    const { value, gradients } = fwdMakeGradFn_unstable((x) => x + 3)(3)
     expect(value).toEqual(6)
     expect(gradients).toEqual([1])
   });
 
   test("when a unary arrow function with exponent is given, then it should return a valid function", () => {
-    const { value, gradients } = makeGradFn((x) => x ** 3)(3)
+    const { value, gradients } = fwdMakeGradFn_unstable((x) => x ** 3)(3)
     expect(value).toEqual(27)
     expect(gradients).toEqual([27])
   });
 
   test("when a binary arrow function is given, then it should return a valid function", () => {
-    const { value, gradients } = makeGradFn((x, y) => x * y + 3)(3, 3)
+    const { value, gradients } = fwdMakeGradFn_unstable((x, y) => x * y + 3)(3, 3)
     expect(value).toEqual(12)
     expect(gradients).toEqual([3, 3])
   });
@@ -59,7 +59,7 @@ describe("given a function expression", () => {
     function fn(x: number) {
       return x + 3
     }
-    const { value, gradients } = makeGradFn(fn)(3)
+    const { value, gradients } = fwdMakeGradFn_unstable(fn)(3)
     expect(value).toEqual(6)
     expect(gradients).toEqual([1])
   });
@@ -69,7 +69,7 @@ describe("given a function expression", () => {
       console.log("hello")
       return x + 3
     }
-    expect(() => makeGradFn(fn)).toThrowError()
+    expect(() => fwdMakeGradFn_unstable(fn)).toThrowError()
   });
 });
 
@@ -77,17 +77,17 @@ describe("given a function expression", () => {
 
 describe("given a complex function expression", () => {
   test("when a complex function expression is given, then it should return a valid function", () => {
-    const { value, gradients } = makeGradFn((x, y) => x * y + Math.sin(x))(3, 3)
+    const { value, gradients } = fwdMakeGradFn_unstable((x, y) => x * y + Math.sin(x))(3, 3)
     expect(value).toEqual(9 + Math.sin(3))
     expect(gradients).toEqual([3 + Math.cos(3), 3])
   });
   test("when a complex function expression is given, then it should return a valid function", () => {
-    const { value, gradients } = makeGradFn((x, y) => x * y + Math.sin(x ** 2))(3, 3)
+    const { value, gradients } = fwdMakeGradFn_unstable((x, y) => x * y + Math.sin(x ** 2))(3, 3)
     expect(value).toEqual(9 + Math.sin(9))
     expect(gradients).toEqual([3 + Math.cos(9) * 6, 3])
   });
   test("when a complex function expression is given, then it should return a valid function", () => {
-    const { value, gradients } = makeGradFn((x, y) => (x ** 2) * y + x)(2, 4)
+    const { value, gradients } = fwdMakeGradFn_unstable((x, y) => (x ** 2) * y + x)(2, 4)
     expect(value).toEqual(18)
     expect(gradients).toEqual([17, 4])
   });
