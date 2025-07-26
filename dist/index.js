@@ -122,7 +122,10 @@ function makeGradFn(fn) {
     fwdPass(ctxt);
     bwdPass(ctxt);
     const value = ctxt.ordering[ctxt.ordering.length - 1].value;
-    const gradients = argsOrder.map((name) => ctxt.inputs[name].gradientAcc);
+    const gradients = argsOrder.map((name) => {
+      var _a, _b;
+      return (_b = (_a = ctxt.inputs[name]) == null ? void 0 : _a.gradientAcc) != null ? _b : 0;
+    });
     return { value, gradients };
   };
 }
