@@ -14,18 +14,18 @@ npm install autodiff-ts
 ```js
 import { makeGradFn } from "autodiff-ts"
 
-const f = (x, y) => y * x + x ** 2
+const f = (x, y) => y ** x + x
 const grad = makeGradFn(f)
 
 ```
-For function $f(x, y) = yx + x^2$, $\frac{\partial f}{\partial x} = 2x + y$ and $\frac{\partial f}{\partial y} = x$.
+For function $f(x, y) = y^x + x$, $\frac{\partial f}{\partial x} = y^x \ln y + 1$ and $\frac{\partial f}{\partial y} = x(y^{x - 1})$.
 
 ```js
 grad(1, 2)
-// { value: 3, gradients: [4, 1] } (gradients field contains [df/dx, df/dy])
+// { value: 3, gradients: [ 2.386294361119891, 1 ] } (gradients field contains [df/dx, df/dy])
 
 grad(3, 4)
-// { value: 21, gradients: [10, 3] }
+// { value: 67, gradients: [ 89.722839111673, 48 ] }
 ```
 
 ## Approach

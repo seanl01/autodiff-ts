@@ -1,6 +1,6 @@
 {
   "name": "autodiff-ts",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
@@ -19,13 +19,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@types/node": "^24.0.3",
     "acorn": "^8.14.1",
-    "acorn-walk": "^8.3.4",
-    "typescript": "^5.8.3",
-    "vitest": "^3.1.2"
+    "acorn-walk": "^8.3.4"
   },
   "devDependencies": {
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "@types/node": "^24.0.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
   }
 }

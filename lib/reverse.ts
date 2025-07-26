@@ -30,7 +30,7 @@ export function makeGradFn(fn: (...params: any[]) => number): (...args: any[]) =
     bwdPass(ctxt)
 
     const value = (ctxt.ordering[ctxt.ordering.length - 1] as Variable).value
-    const gradients = argsOrder.map(name => ctxt.inputs[name].gradientAcc)
+    const gradients = argsOrder.map(name => ctxt.inputs[name]?.gradientAcc ?? 0)
 
     return { value, gradients }
   }
