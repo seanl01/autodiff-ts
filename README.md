@@ -18,7 +18,7 @@ const f = (x, y) => y ** x + x
 const grad = makeGradFn(f)
 
 ```
-For function $f(x, y) = y^x + x$, $\frac{\partial f}{\partial x} = y^x \ln y + 1$ and $\frac{\partial f}{\partial y} = x(y^{x - 1})$.
+For function $f(x, y) = y^x + x$, $\frac{\partial f}{\partial x} = y^x \ln y + 1$ and $\frac{\partial f}{\partial y} = xy^{x - 1}$.
 
 ```js
 grad(1, 2)
@@ -90,7 +90,8 @@ This project was informed and inspired by a few key sources:
 - [*Reverse-mode automatic differentiation: a tutorial* from Rufflewind's Scratchpad](https://rufflewind.com/2016-12-30/reverse-mode-automatic-differentiation)
 - [*Automatic Differentiation & Transformers* from Matt Gormley's 10-301/10-601 course in Carnegie Mellon University](https://www.cs.cmu.edu/~mgormley/courses/10601-f23//slides/lecture18-transformer.pdf)
 ### Limitations
-- Currently it only supports functions that accept scalars and not vectors
+- Currently it only supports functions that accept scalars and not vectors. This limits what you can do in terms of loss functions, as you can't easily define a loss function that is calculated on a batch/dataset.
+- Currently it only supports a number of mathematical operators and primitives. Refer to lib/nodeFns.ts for the breakdown.
 - Currently no memoisation on the primals calculated is being done. i.e. every time we are calculating the final output gradient w.r.t. to another input variable, we end up calculating the node values again. These optimisations are central to the appeal of automatic differentiation.
 
 [^1]: [Automatic differentiation in machine learning: a survey](https://arxiv.org/abs/1502.05767)
